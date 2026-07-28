@@ -116,12 +116,6 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, char *pcTaskName)
    called if a stack overflow is detected. */
 }
 
-//void at_handler_feed(uint8_t byte)
-//{
-//    static uint8_t echo_buf[2];
-//    echo_buf[0] = byte;
-//    CDC_Transmit(echo_buf, 1);
-//}
 /* USER CODE END 4 */
 
 /**
@@ -174,21 +168,19 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN defaultTask */
-    uint8_t msg[] = "USB CDC ready\r\n";
-
-    // Wait for USB to enumerate (host assigns address)
+//    uint8_t msg[] = "USB CDC ready\r\n";
+//
+//    // Wait for USB to enumerate (host assigns address)
     osDelay(2000);
-
-    CDC_Transmit(msg, sizeof(msg) - 1);
+//
+//    CDC_Transmit(msg, sizeof(msg) - 1);
   /* Infinite loop */
   for(;;)
   {
     osDelay(1);
-
   }
   /* USER CODE END defaultTask */
 }
-
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
 /* LVGL timer for tasks */

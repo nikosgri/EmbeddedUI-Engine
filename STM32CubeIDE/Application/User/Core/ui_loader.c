@@ -1,24 +1,7 @@
 ///**
 // ******************************************************************************
 // * @file    ui_loader.c
-// * @brief   Generic LVGL XML UI loader.
-// *
-// *  Discovery model — no filenames hardcoded except the entry point:
-// *
-// *      ui/globals.xml         registered first (if present)
-// *      ui/components/ *.xml   all registered, in directory order
-// *      ui/screens/ *.xml      all registered, in directory order
-// *
-// *  Entry-point convention:
-// *      The designer always exports the startup screen as
-// *      "main_screen.xml" into ui/screens/. After every XML is
-// *      registered, the firmware instantiates the component named
-// *      "main_screen" and loads it as the active screen.
-// *
-// *  Consequence:
-// *      Adding new screens, components, fonts, or images requires
-// *      NO firmware change — only an upload of the new files to the
-// *      correct directory on the external flash.
+// * @brief   Generic LVGL XML UI loader (Official 2026 Manual Compliant)
 // ******************************************************************************
 // */
 //
@@ -29,6 +12,7 @@
 //
 //#include <stdio.h>
 //#include <string.h>
+//#include <stdlib.h>
 //
 ///* =========================================================================
 // * Conventions
@@ -37,23 +21,18 @@
 //#define STARTUP_SCREEN_NAME     "main_screen"
 //
 //#define UI_GLOBALS_LFS_PATH     "ui/globals.xml"
-//#define UI_GLOBALS_LV_PATH      "A:ui/globals.xml"
 //#define UI_COMPONENTS_DIR       "ui/components"
 //#define UI_SCREENS_DIR          "ui/screens"
 //
 ///* =========================================================================
 // * Diagnostic state
-// *
-// *  Reflects the most recent ui_loader_render() invocation. Surfaced on
-// *  the red error screen so issues can be diagnosed on a board with no
-// *  UART access.
 // * =========================================================================*/
 //
-//static int s_globals_register_err   = -99;  /* -99 = "not attempted"        */
-//static int s_components_walked      = 0;    /* xml files seen in components */
-//static int s_components_registered  = 0;    /* of those, registered OK      */
-//static int s_screens_walked         = 0;    /* xml files seen in screens    */
-//static int s_screens_registered     = 0;    /* of those, registered OK      */
+//static int s_globals_register_err   = -99;
+//static int s_components_walked      = 0;
+//static int s_components_registered  = 0;
+//static int s_screens_walked         = 0;
+//static int s_screens_registered     = 0;
 //static int s_create_screen_failed   = 0;
 //
 ///* =========================================================================
@@ -65,6 +44,7 @@
 //static void _walk_and_register(const char *dir_path,
 //                                int        *out_walked,
 //                                int        *out_registered);
+//static lv_result_t _safe_register_from_file(const char *component_name, const char *lfs_path);
 //
 ///* =========================================================================
 // * Public API
@@ -72,13 +52,12 @@
 //
 //bool ui_loader_has_ui(void)
 //{
-//    /* There must be at least one *.xml in ui/screens/ for us to render. */
 //    return _count_xmls_in(UI_SCREENS_DIR) > 0;
 //}
 //
 //UiLoaderResult_t ui_loader_render(void)
 //{
-//    /* Reset diagnostics for this attempt */
+//    /* Reset diagnostics */
 //    s_globals_register_err  = -99;
 //    s_components_walked     = 0;
 //    s_components_registered = 0;
@@ -86,20 +65,16 @@
 //    s_screens_registered    = 0;
 //    s_create_screen_failed  = 0;
 //
-//    /* No screens at all → nothing to render */
 //    if (_count_xmls_in(UI_SCREENS_DIR) == 0)
 //    {
 //        return UI_LOADER_ERR_NO_FILES;
 //    }
 //
-//    /* ---- Step 1: register globals.xml if present ---------------------
-//     * Must precede components/screens because they reference its
-//     * constants, fonts, images, and styles by name (e.g. #bg_blue). */
+//    /* ---- Step 1: register globals.xml από Data Buffer ---- */
 //    struct lfs_info gi;
 //    if (lfs_stat(&lfs, UI_GLOBALS_LFS_PATH, &gi) == LFS_ERR_OK)
 //    {
-//        s_globals_register_err =
-//            lv_xml_register_component_from_file(UI_GLOBALS_LV_PATH);
+//        s_globals_register_err = _safe_register_from_file("globals", UI_GLOBALS_LFS_PATH);
 //
 //        if (s_globals_register_err != LV_RESULT_OK)
 //        {
@@ -107,27 +82,23 @@
 //        }
 //    }
 //
-//    /* ---- Step 2: register every component XML ------------------------
-//     * Components must be registered before screens that instantiate
-//     * them, otherwise the screen parser cannot resolve the names. */
+//    /* ---- Step 2: register components ---- */
 //    _walk_and_register(UI_COMPONENTS_DIR,
 //                       &s_components_walked,
 //                       &s_components_registered);
 //
-//    /* ---- Step 3: register every screen XML --------------------------- */
+//    /* ---- Step 3: register screens ---- */
 //    _walk_and_register(UI_SCREENS_DIR,
 //                       &s_screens_walked,
 //                       &s_screens_registered);
 //
-//    /* If screen files exist on flash but none registered, the LVGL FS
-//     * driver binding is likely broken or every screen has parse errors. */
 //    if (s_screens_walked > 0 && s_screens_registered == 0)
 //    {
 //        return UI_LOADER_ERR_LOAD;
 //    }
 //
-//    /* ---- Step 4: instantiate and load the startup screen ------------- */
-//    lv_obj_t *scr = lv_xml_create(NULL, STARTUP_SCREEN_NAME, NULL);
+//    /* ---- Step 4: Instantiate και load screen βάσει του Manual ---- */
+//    lv_obj_t *scr = lv_xml_create_screen(STARTUP_SCREEN_NAME);
 //    if (scr == NULL)
 //    {
 //        s_create_screen_failed = 1;
@@ -225,15 +196,40 @@
 //}
 //
 ///**
-// * @brief  Walk a directory and register every *.xml file inside it.
-// *
-// *  Non-recursive (flat directory only). On individual file failure the
-// *  file is skipped — one bad XML must not block the rest of the UI.
-// *
-// *  @param  dir_path        LittleFS path (e.g. "ui/screens")
-// *  @param  out_walked      Number of *.xml files seen in the directory
-// *  @param  out_registered  Of those, the count that registered OK
+// * @brief Ασφαλής ανάγνωση αρχείου στη RAM και εγγραφή μέσω της επίσημης
+// * συνάρτησης lv_xml_register_component_from_data
 // */
+//static lv_result_t _safe_register_from_file(const char *component_name, const char *lfs_path)
+//{
+//    struct lfs_info info;
+//    if (lfs_stat(&lfs, lfs_path, &info) != LFS_ERR_OK) {
+//        return LV_RESULT_INVALID;
+//    }
+//
+//    lfs_file_t f;
+//    if (lfs_file_open(&lfs, &f, lfs_path, LFS_O_RDONLY) != LFS_ERR_OK) {
+//        return LV_RESULT_INVALID;
+//    }
+//
+//    char *xml_buf = malloc(info.size + 1);
+//    if (xml_buf == NULL) {
+//        lfs_file_close(&lfs, &f);
+//        return LV_RESULT_INVALID;
+//    }
+//
+//    lfs_file_read(&lfs, &f, xml_buf, info.size);
+//    xml_buf[info.size] = '\0';
+//
+//    /* Κλείσιμο αρχείου αμέσως - Η LittleFS απελευθερώνεται! */
+//    lfs_file_close(&lfs, &f);
+//
+//    /* Χρήση της σωστής συνάρτησης από το manual */
+//    lv_result_t res = lv_xml_register_component_from_data(component_name, xml_buf);
+//
+//    free(xml_buf);
+//    return res;
+//}
+//
 //static void _walk_and_register(const char *dir_path,
 //                                int        *out_walked,
 //                                int        *out_registered)
@@ -258,15 +254,22 @@
 //
 //        walked++;
 //
-//        char lv_path[LFS_NAME_MAX + 64];
-//        int written = snprintf(lv_path, sizeof(lv_path),
-//                               "A:%s/%s", dir_path, info.name);
-//        if (written < 0 || (size_t)written >= sizeof(lv_path))
+//        char full_lfs_path[LFS_NAME_MAX + 64];
+//        int written = snprintf(full_lfs_path, sizeof(full_lfs_path),
+//                               "%s/%s", dir_path, info.name);
+//
+//        if (written < 0 || (size_t)written >= sizeof(full_lfs_path))
 //        {
-//            continue;   /* path too long — skip this file safely */
+//            continue;
 //        }
 //
-//        if (lv_xml_register_component_from_file(lv_path) == LV_RESULT_OK)
+//        /* Απομονώνουμε το όνομα του αρχείου χωρίς το ".xml" για να το δώσουμε ως component name */
+//        char comp_name[LFS_NAME_MAX];
+//        size_t len = strlen(info.name);
+//        strncpy(comp_name, info.name, len - 4);
+//        comp_name[len - 4] = '\0';
+//
+//        if (_safe_register_from_file(comp_name, full_lfs_path) == LV_RESULT_OK)
 //        {
 //            registered++;
 //        }
@@ -351,11 +354,30 @@ UiLoaderResult_t ui_loader_render(void)
         return UI_LOADER_ERR_NO_FILES;
     }
 
-    /* ---- Step 1: register globals.xml από Data Buffer ---- */
+    /* ---- Step 1: register globals.xml ---- */
     struct lfs_info gi;
     if (lfs_stat(&lfs, UI_GLOBALS_LFS_PATH, &gi) == LFS_ERR_OK)
     {
-        s_globals_register_err = _safe_register_from_file("globals", UI_GLOBALS_LFS_PATH);
+        /* IMPORTANT: globals.xml must be registered via
+         * lv_xml_register_component_from_file(), NOT
+         * lv_xml_register_component_from_data(). Per the official LVGL
+         * 9.5 docs (docs.lvgl.io/9.5/xml/assets/images.html):
+         *   "When registering globals.xml with
+         *    lv_xml_register_component_from_file('A:path/to/globals.xml'),
+         *    names are automatically mapped to the path... Fonts and
+         *    Images are registered automatically when globals.xml is
+         *    registered."
+         * The previous approach here read the file into a RAM buffer and
+         * called the _from_data variant instead — that parses the XML
+         * fine (colors/consts show up), but does not appear to trigger
+         * the automatic image/font name registration step, which is
+         * exactly the symptom observed: <lv_image src="arrow"/> resolves
+         * to nothing even though globals.xml correctly lists
+         * <file name="arrow" src_path="A:ui/images/arrow.png"/>. */
+        char lfs_full_path[64];
+        snprintf(lfs_full_path, sizeof(lfs_full_path), "A:%s", UI_GLOBALS_LFS_PATH);
+
+        s_globals_register_err = lv_xml_register_component_from_file(lfs_full_path);
 
         if (s_globals_register_err != LV_RESULT_OK)
         {
@@ -478,7 +500,10 @@ static int _count_xmls_in(const char *dir_path)
 
 /**
  * @brief Ασφαλής ανάγνωση αρχείου στη RAM και εγγραφή μέσω της επίσημης
- * συνάρτησης lv_xml_register_component_from_data
+ * συνάρτησης lv_xml_register_component_from_data.
+ *
+ * Χρησιμοποιείται ΜΟΝΟ για components/screens πλέον — ΟΧΙ για globals.xml,
+ * βλέπε το σχόλιο στο ui_loader_render() Step 1 για το γιατί.
  */
 static lv_result_t _safe_register_from_file(const char *component_name, const char *lfs_path)
 {

@@ -183,80 +183,44 @@ int main(void)
 	/* reset display */
 	HAL_GPIO_WritePin(LCD_DISP_RESET_GPIO_Port, LCD_DISP_RESET_Pin, GPIO_PIN_SET);
 
-//	//ext_flash_run_test();
-//
-//	UiStorageResult_t storage_result = ui_storage_init();
-//	if (storage_result != UI_STORAGE_OK)
-//	{
-//	    /* Halt here during development so you catch the error in the debugger */
-//	    Error_Handler();
-//	}
-//
-//	//ui_storage_list_tree();
-//
-//	/* initialize LVGL framework */
-//	lv_init();
-//	lv_tick_set_cb(HAL_GetTick);
-//
-//	/* initialize display and touchscreen */
-//	lvgl_display_init();
-//	lvgl_touchscreen_init();
-//
-//	/* Render UI from flash if files are present, otherwise show placeholder */
-//	if (ui_loader_has_ui())
-//	{
-//	    UiLoaderResult_t res = ui_loader_render();
-//	    if (res != UI_LOADER_OK)
-//	    {
-//	        ui_loader_show_error(res);
-//	    }
-//	}
-//	else
-//	{
-//	    ui_loader_show_placeholder();
-//	}
-//
-//	/* lvgl demo */
-//	 //lv_demo_widgets();
-//	//lv_demo_music();
-//	//lv_demo_benchmark();
 	/* 1. Αρχικοποίηση και Mount του LittleFS File System στην Flash */
-		UiStorageResult_t storage_result = ui_storage_init();
-		if (storage_result != UI_STORAGE_OK)
+	UiStorageResult_t storage_result = ui_storage_init();
+	if (storage_result != UI_STORAGE_OK)
+	{
+		Error_Handler();
+	}
+
+	/* 2. Αρχικοποίηση του LVGL Core Framework */
+	lv_init();
+	lv_tick_set_cb(HAL_GetTick);
+
+	/* 3. ΚΡΙΣΙΜΟ: Σύνδεση του LittleFS Handler με την LVGL (Τώρα που η lv_init() έχει τρέξει) */
+#if LV_USE_FS_LITTLEFS
+	extern lfs_t lfs; // Φέρνουμε τον pointer της LittleFS από το lfs_port
+	lv_littlefs_set_handler(&lfs);
+#endif
+
+	/* 4. Εκτύπωση του δέντρου αρχείων στο UART (για debugging) */
+	ui_storage_list_tree();
+
+	/* 5. Αρχικοποίηση της οθόνης και του touchscreen */
+	lvgl_display_init();
+	lvgl_touchscreen_init();
+
+
+	/* 6. Render του UI από τα XML αρχεία της Flash */
+	if (ui_loader_has_ui())
+	{
+		UiLoaderResult_t res = ui_loader_render();
+		if (res != UI_LOADER_OK)
 		{
-		    Error_Handler();
+			ui_loader_show_error(res);
 		}
-
-		/* 2. Αρχικοποίηση του LVGL Core Framework */
-		lv_init();
-		lv_tick_set_cb(HAL_GetTick);
-
-		/* 3. ΚΡΙΣΙΜΟ: Σύνδεση του LittleFS Handler με την LVGL (Τώρα που η lv_init() έχει τρέξει) */
-	#if LV_USE_FS_LITTLEFS
-		extern lfs_t lfs; // Φέρνουμε τον pointer της LittleFS από το lfs_port
-		lv_littlefs_set_handler(&lfs);
-	#endif
-
-		/* 4. Εκτύπωση του δέντρου αρχείων στο UART (για debugging) */
-		ui_storage_list_tree();
-
-		/* 5. Αρχικοποίηση της οθόνης και του touchscreen */
-		lvgl_display_init();
-		lvgl_touchscreen_init();
-
-		/* 6. Render του UI από τα XML αρχεία της Flash */
-		if (ui_loader_has_ui())
-		{
-		    UiLoaderResult_t res = ui_loader_render();
-		    if (res != UI_LOADER_OK)
-		    {
-		        ui_loader_show_error(res);
-		    }
-		}
-		else
-		{
-		    ui_loader_show_placeholder();
-		}
+	}
+	else
+	{
+		ui_loader_show_placeholder();
+	}
 
 	/* USER CODE END 2 */
 
