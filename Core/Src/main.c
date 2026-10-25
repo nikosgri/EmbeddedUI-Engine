@@ -222,6 +222,7 @@ int main(void)
 		ui_loader_show_placeholder();
 	}
 
+
 	/* USER CODE END 2 */
 
 	/* Init scheduler */
