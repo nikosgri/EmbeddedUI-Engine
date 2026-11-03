@@ -59,6 +59,7 @@
 #include "ui_storage.h"
 #include "ui_loader.h"
 #include "usb_at_handler.h"
+#include "value_engine.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -215,6 +216,13 @@ int main(void)
 		if (res != UI_LOADER_OK)
 		{
 			ui_loader_show_error(res);
+		}
+		else
+		{
+			/* 7. Values: read ui/values.json and connect the subjects of
+			 *    globals.xml to the hardware (no ADC access here — the
+			 *    sampling task starts in MX_FREERTOS_Init). */
+			(void)value_engine_load();
 		}
 	}
 	else

@@ -27,6 +27,7 @@
 #include "lvgl/lvgl.h"
 #include "usbd_cdc_if.h"
 #include "usb_at_handler.h"
+#include "value_engine.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -155,6 +156,7 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
   usb_at_init();
+  value_engine_start();   /* own task (static stack): loads ui/values.json, then reads the hardware into the UI's Values */
   /* USER CODE END RTOS_EVENTS */
 
 }
@@ -193,4 +195,3 @@ void LVGLTimer(void *argument)
   }
 }
 /* USER CODE END Application */
-
